@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meme-classifier-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Mount model directory
+      - ./vit-base-patch16-224-in21k-meme:/app/model:ro
+    environment:
+      - MODEL_PATH=/app/model
+      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-10}
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - meme-classifier-network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meme-classifier-frontend
+    ports:
+      - "${FRONTEND_PORT:-8501}:80"
+    environment:
+      - API_URL=http://localhost:${BACKEND_PORT:-8000}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - meme-classifier-network
+
+networks:
+  meme-classifier-network:
+    driver: bridge
